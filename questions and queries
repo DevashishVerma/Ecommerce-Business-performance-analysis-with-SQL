@@ -1,0 +1,94 @@
+
+#ANNUAL PRODUCT CATEGORY QUALITY ANALYSIS
+
+#Q1 Calculate total canceled orders per year?
+SELECT YEAR(order_purchase_timestamp) AS year , COUNT(order_status) FROM orders_dataset
+WHERE order_status = 'canceled'
+GROUP BY year;
+
+#Q2 Calculate highest total revenues per product category per year?
+WITH my_cte AS (SELECT YEAR(od.order_purchase_timestamp) AS year , pr.product_category_name , 
+SUM(oid.price + oid.freight_value) AS revenue , 
+RANK() OVER(PARTITION BY YEAR(od.order_purchase_timestamp) 
+ORDER BY SUM(oid.price + oid.freight_value) DESC) AS rnk
+FROM orders_dataset AS od
+INNER JOIN order_items_dataset AS oid
+ON od.order_id = oid.order_id
+INNER JOIN product_dataset AS pr
+ON pr.product_id = oid.product_id
+WHERE od.order_status = 'delivered'
+GROUP BY year ,pr.product_category_name)
+SELECT year , product_category_name , revenue FROM my_cte
+WHERE rnk = 1;
+
+#Q3 Calculate highest canceled order per product category per year?
+WITH my_cte AS (SELECT YEAR(od.order_purchase_timestamp) AS year , pr.product_category_name ,
+COUNT(od.order_id) AS cnt , 
+RANK() OVER(PARTITION BY YEAR(od.order_purchase_timestamp) ORDER BY COUNT(od.order_id) DESC) AS rnk
+FROM orders_dataset AS od
+INNER JOIN order_items_dataset AS oid
+ON od.order_id = oid.order_id
+INNER JOIN product_dataset AS pr
+ON pr.product_id = oid.product_id
+WHERE od.order_status = 'canceled'
+GROUP BY year , pr.product_category_name)
+SELECT year , product_category_name , cnt FROM my_cte
+WHERE rnk = 1;
+
+#Q4 Create a new table which contain all the informations above?
+CREATE TABLE all_answers (
+year INT,
+total_canceled_orders INT,
+product_category VARCHAR(50),
+revenue INT,
+category_name VARCHAR(50),
+no_of_orders_canceled int);
+
+INSERT INTO all_answers
+(year , total_canceled_orders , product_category , revenue , category_name , no_of_orders_canceled)
+VALUES 
+(2016, 26 ,'perfumery' , 907.86 , 'fashion_bags_accessories' , 1),
+(2017 , 265 , 'bed_bath_table' , 42800.399 , 'computers_accesories' , 5),
+(2018 , 334 , 'health_beauty' , 58036.69 , 'baby' , 5);
+
+#ANNUAL PAYMENT USAGE TYPE ANALYSIS
+
+#Q1 Calculate the number of usage per payment method, sorted by most frequently used?
+SELECT opd.payment_type , COUNT(opd.payment_type) FROM order_payments_dataset AS opd
+GROUP BY opd.payment_type
+ORDER BY COUNT(opd.payment_type) DESC;
+
+#Q2 Calculate annual payment type usage?
+SELECT YEAR(od.order_purchase_timestamp) AS year , opd.payment_type , 
+COUNT(opd.payment_type) AS annual_usage,
+RANK() OVER(PARTITION BY YEAR(od.order_purchase_timestamp) ORDER BY COUNT(opd.payment_type) DESC) AS rnk
+FROM order_payments_dataset AS opd
+INNER JOIN orders_dataset AS od
+ON opd.order_id = od.order_id
+GROUP BY year , opd.payment_type;
+
+#ANNUAL CUSTOMER ACTIVITY GROWTH ANALYSIS
+
+#Q1 Calculate total monthly active users per year?
+
+WITH my_cte AS (
+SELECT YEAR(od.order_purchase_timestamp) AS year , MONTH(od.order_purchase_timestamp) AS month , 
+COUNT(DISTINCT ci.customer_id) AS total_customers,
+RANK () OVER(PARTITION BY YEAR(od.order_purchase_timestamp) , MONTH(od.order_purchase_timestamp)
+ORDER BY MONTH(od.order_purchase_timestamp))
+FROM orders_dataset AS od
+INNER JOIN customers_dataset AS ci
+ON od.customer_id = ci.customer_id
+GROUP BY year , month)
+SELECT year , month , total_customers FROM my_cte;
+
+#Q2 Calculate the number of customers who placed a repeat order per year?
+
+WITH my_cte AS (
+SELECT YEAR( od.order_purchase_timestamp) AS year, od.customer_id , oid.product_id , COUNT(oid.product_id) AS cnt FROM orders_dataset AS od
+INNER JOIN order_items_dataset  AS oid
+ON od.order_id = oid.order_id
+GROUP BY year ,od.customer_id , oid.product_id)
+SELECT year, COUNT(DISTINCT customer_id) FROM my_cte
+WHERE cnt > 1
+GROUP BY year;
